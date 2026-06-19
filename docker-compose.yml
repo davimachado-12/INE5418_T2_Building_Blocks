@@ -1,0 +1,103 @@
+services:
+  # ─── Bank Node A ───────────────────────────────────────────────────
+  bank-node-a:
+    build: .
+    container_name: bank-node-a
+    command: python3 -u src/bank_node.py
+    environment:
+      - NODE_ID=A
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=6001
+      - ACCOUNT_START=1000
+      - ACCOUNT_END=1004
+      - INITIAL_BALANCE=1000.0
+    ports:
+      - "6001:6001"
+    networks:
+      - bank-network
+    restart: unless-stopped
+
+  # ─── Bank Node B ───────────────────────────────────────────────────
+  bank-node-b:
+    build: .
+    container_name: bank-node-b
+    command: python3 -u src/bank_node.py
+    environment:
+      - NODE_ID=B
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=6002
+      - ACCOUNT_START=2000
+      - ACCOUNT_END=2004
+      - INITIAL_BALANCE=1000.0
+    ports:
+      - "6002:6002"
+    networks:
+      - bank-network
+    restart: unless-stopped
+
+  # ─── Bank Node C ───────────────────────────────────────────────────
+  bank-node-c:
+    build: .
+    container_name: bank-node-c
+    command: python3 -u src/bank_node.py
+    environment:
+      - NODE_ID=C
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=6003
+      - ACCOUNT_START=3000
+      - ACCOUNT_END=3004
+      - INITIAL_BALANCE=1000.0
+    ports:
+      - "6003:6003"
+    networks:
+      - bank-network
+    restart: unless-stopped
+
+  # ─── Transaction Coordinator ───────────────────────────────────────
+  coordinator:
+    build: .
+    container_name: coordinator
+    command: python3 -u src/coordinator.py
+    environment:
+      - COORDINATOR_HOST=0.0.0.0
+      - COORDINATOR_PORT=5000
+      - NODE_A_HOST=bank-node-a
+      - NODE_A_PORT=6001
+      - NODE_A_ACC_START=1000
+      - NODE_A_ACC_END=1004
+      - NODE_B_HOST=bank-node-b
+      - NODE_B_PORT=6002
+      - NODE_B_ACC_START=2000
+      - NODE_B_ACC_END=2004
+      - NODE_C_HOST=bank-node-c
+      - NODE_C_PORT=6003
+      - NODE_C_ACC_START=3000
+      - NODE_C_ACC_END=3004
+    ports:
+      - "5000:5000"
+    depends_on:
+      - bank-node-a
+      - bank-node-b
+      - bank-node-c
+    networks:
+      - bank-network
+    restart: unless-stopped
+
+  # ─── CLI Client ────────────────────────────────────────────────────
+  client:
+    build: .
+    container_name: bank-client
+    command: python3 -u src/client.py
+    environment:
+      - COORDINATOR_HOST=coordinator
+      - COORDINATOR_PORT=5000
+    depends_on:
+      - coordinator
+    networks:
+      - bank-network
+    stdin_open: true
+    tty: true
+
+networks:
+  bank-network:
+    driver: bridge
