@@ -11,6 +11,9 @@ services:
       - ACCOUNT_START=1000
       - ACCOUNT_END=1004
       - INITIAL_BALANCE=1000.0
+      - DATA_DIR=/data
+    volumes:
+      - node-a-data:/data
     ports:
       - "6001:6001"
     networks:
@@ -29,6 +32,9 @@ services:
       - ACCOUNT_START=2000
       - ACCOUNT_END=2004
       - INITIAL_BALANCE=1000.0
+      - DATA_DIR=/data
+    volumes:
+      - node-b-data:/data
     ports:
       - "6002:6002"
     networks:
@@ -47,6 +53,9 @@ services:
       - ACCOUNT_START=3000
       - ACCOUNT_END=3004
       - INITIAL_BALANCE=1000.0
+      - DATA_DIR=/data
+    volumes:
+      - node-c-data:/data
     ports:
       - "6003:6003"
     networks:
@@ -101,3 +110,8 @@ services:
 networks:
   bank-network:
     driver: bridge
+
+volumes:
+  node-a-data:
+  node-b-data:
+  node-c-data:

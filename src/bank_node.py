@@ -96,10 +96,17 @@ class BankNode:
         self.account_start, self.account_end = account_range
         self.logger = logging.getLogger(f"BankNode-{node_id}")
 
+        self.data_dir = os.environ.get("DATA_DIR", "./data")
+        os.makedirs(self.data_dir, exist_ok=True)
+        self.state_file = os.path.join(self.data_dir, f"state_{self.node_id}.json")
+
         # Armazenamento de contas: account_id -> saldo
         self.accounts: Dict[int, float] = {}
-        for acc_id in range(self.account_start, self.account_end + 1):
-            self.accounts[acc_id] = initial_balance
+        
+        # Write-Ahead Log
+        self.wal: list = []
+
+        self._load_state(initial_balance)
 
         # Tabela de locks: account_id -> LockEntry
         self.lock_table: Dict[int, LockEntry] = {}
@@ -109,8 +116,6 @@ class BankNode:
         self.transactions: Dict[str, TransactionContext] = {}
         self.tx_lock = threading.Lock()
 
-        # Write-Ahead Log
-        self.wal: list = []
         self.wal_lock = threading.Lock()
 
         self.server_socket = None
@@ -120,6 +125,32 @@ class BankNode:
             f"Inicializado com contas {self.account_start}-{self.account_end}, "
             f"saldo inicial: {initial_balance}"
         )
+
+    def _load_state(self, initial_balance: float) -> None:
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, "r") as f:
+                    state = json.load(f)
+                    self.accounts = {int(k): v for k, v in state.get("accounts", {}).items()}
+                    self.wal = state.get("wal", [])
+                self.logger.info(f"Estado carregado do disco: {self.state_file}")
+            except Exception as e:
+                self.logger.error(f"Erro ao carregar estado, recriando: {e}")
+                self._init_accounts(initial_balance)
+        else:
+            self._init_accounts(initial_balance)
+
+    def _init_accounts(self, initial_balance: float) -> None:
+        for acc_id in range(self.account_start, self.account_end + 1):
+            self.accounts[acc_id] = initial_balance
+        self._save_state()
+
+    def _save_state(self) -> None:
+        try:
+            with open(self.state_file, "w") as f:
+                json.dump({"accounts": self.accounts, "wal": self.wal}, f)
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar estado: {e}")
 
     # --- Gerenciador de Locks (S2PL) ---
 
@@ -404,7 +435,7 @@ class BankNode:
             self.transactions.pop(tx_id, None)
 
     def _wal_write(self, tx_id: str, state: str, operations: list) -> None:
-        """Escreve uma entrada no Write-Ahead Log."""
+        """Escreve uma entrada no Write-Ahead Log e salva estado no disco."""
         with self.wal_lock:
             entry = {
                 "timestamp": time.time(),
@@ -413,6 +444,7 @@ class BankNode:
                 "operations": operations
             }
             self.wal.append(entry)
+            self._save_state()
             self.logger.debug(f"WAL: {tx_id[:8]} -> {state}")
 
     # --- Consultas diretas de saldo/listagem ---
