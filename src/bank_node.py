@@ -1,16 +1,3 @@
-"""
-No Bancario - Sistema Distribuido de Transacoes Bancarias
-
-Cada no bancario gerencia uma particao de contas e participa do
-protocolo Two-Phase Commit (2PC) como participante/cohort.
-
-Controle de concorrencia: Strict Two-Phase Locking (S2PL)
-- Fase de crescimento: locks sao adquiridos conforme necessario
-- Fase de encolhimento: TODOS os locks sao liberados apenas no commit/abort
-- Variante Strict: write locks mantidos ate o commit, prevenindo aborts em cascata
-- Prevencao de deadlock: aquisicao de lock com timeout, abort em caso de timeout
-"""
-
 import os
 import sys
 import json
@@ -52,7 +39,7 @@ class LockType(Enum):
 
 @dataclass
 class LockEntry:
-    """Representa um lock mantido sobre uma conta."""
+    # Representa um lock mantido sobre uma conta.
     lock_type: LockType
     holders: Set[str] = field(default_factory=set)  # IDs das transacoes que detem o lock
     waiters: list = field(default_factory=list)       # (tx_id, lock_type, event) aguardando
@@ -69,7 +56,7 @@ class TxState(Enum):
 
 @dataclass
 class TransactionContext:
-    """Contexto de uma transacao neste no."""
+    # Contexto de uma transacao neste no.
     tx_id: str
     state: TxState = TxState.ACTIVE
     locked_accounts: Dict[int, LockType] = field(default_factory=dict)
@@ -81,12 +68,10 @@ class TransactionContext:
 # --- No Bancario ---
 
 class BankNode:
-    """
-    No bancario que gerencia uma particao de contas.
-
-    Implementa Strict Two-Phase Locking (S2PL) para controle de concorrencia
-    e participa do Two-Phase Commit (2PC) como cohort.
-    """
+    # No bancario que gerencia uma particao de contas.
+    # 
+    # Implementa Strict Two-Phase Locking (S2PL) para controle de concorrencia
+    # e participa do Two-Phase Commit (2PC) como cohort.
 
     def __init__(self, node_id: str, host: str, port: int,
                  account_range: Tuple[int, int], initial_balance: float = 1000.0):
@@ -156,15 +141,13 @@ class BankNode:
 
     def acquire_lock(self, tx_id: str, account_id: int,
                      lock_type: LockType) -> bool:
-        """
-        Adquire um lock sobre uma conta para uma transacao.
-
-        Regras do S2PL:
-        - Multiplos locks READ podem coexistir (compartilhados)
-        - Lock WRITE eh exclusivo
-        - Se o lock nao puder ser adquirido dentro do timeout, retorna False
-          (prevencao de deadlock)
-        """
+        # Adquire um lock sobre uma conta para uma transacao.
+        # 
+        # Regras do S2PL:
+        # - Multiplos locks READ podem coexistir (compartilhados)
+        # - Lock WRITE eh exclusivo
+        # - Se o lock nao puder ser adquirido dentro do timeout, retorna False
+        # (prevencao de deadlock)
         deadline = time.time() + LOCK_TIMEOUT
         event = threading.Event()
 
@@ -226,11 +209,9 @@ class BankNode:
         return False
 
     def release_locks(self, tx_id: str) -> None:
-        """
-        Libera TODOS os locks mantidos por uma transacao.
-
-        No S2PL, isso so acontece no momento do commit/abort.
-        """
+        # Libera TODOS os locks mantidos por uma transacao.
+        # 
+        # No S2PL, isso so acontece no momento do commit/abort.
         with self.lock_table_lock:
             accounts_to_release = []
             for account_id, entry in self.lock_table.items():
@@ -258,7 +239,7 @@ class BankNode:
     # --- Operacoes de Transacao ---
 
     def begin_transaction(self, tx_id: str) -> TransactionContext:
-        """Inicia uma nova transacao neste no."""
+        # Inicia uma nova transacao neste no.
         with self.tx_lock:
             ctx = TransactionContext(tx_id=tx_id)
             self.transactions[tx_id] = ctx
@@ -266,7 +247,7 @@ class BankNode:
             return ctx
 
     def read_balance(self, tx_id: str, account_id: int) -> Optional[float]:
-        """Le o saldo de uma conta dentro de uma transacao (adquire lock READ)."""
+        # Le o saldo de uma conta dentro de uma transacao (adquire lock READ).
         if account_id not in self.accounts:
             return None
 
@@ -286,7 +267,7 @@ class BankNode:
 
     def write_balance(self, tx_id: str, account_id: int,
                       new_balance: float) -> bool:
-        """Escreve um novo saldo dentro de uma transacao (adquire lock WRITE)."""
+        # Escreve um novo saldo dentro de uma transacao (adquire lock WRITE).
         if account_id not in self.accounts:
             return False
 
@@ -313,15 +294,13 @@ class BankNode:
     # --- Protocolo 2PC (Participante) ---
 
     def handle_prepare(self, tx_id: str, operations: list) -> bool:
-        """
-        2PC Fase 1: PREPARE
-
-        Executa as operacoes tentativamente:
-        1. Adquire locks (fase de crescimento do S2PL)
-        2. Valida operacoes (ex.: saldo suficiente)
-        3. Escreve no WAL
-        4. Vota COMMIT ou ABORT
-        """
+        # 2PC Fase 1: PREPARE
+        # 
+        # Executa as operacoes tentativamente:
+        # 1. Adquire locks (fase de crescimento do S2PL)
+        # 2. Valida operacoes (ex.: saldo suficiente)
+        # 3. Escreve no WAL
+        # 4. Vota COMMIT ou ABORT
         ctx = self.begin_transaction(tx_id)
 
         for op in operations:
@@ -376,12 +355,10 @@ class BankNode:
         return True
 
     def handle_commit(self, tx_id: str) -> bool:
-        """
-        2PC Fase 2: COMMIT
-
-        Aplica todas as escritas pendentes e libera os locks
-        (fase de encolhimento do S2PL).
-        """
+        # 2PC Fase 2: COMMIT
+        # 
+        # Aplica todas as escritas pendentes e libera os locks
+        # (fase de encolhimento do S2PL).
         with self.tx_lock:
             ctx = self.transactions.get(tx_id)
             if not ctx:
@@ -411,17 +388,15 @@ class BankNode:
         return True
 
     def handle_abort(self, tx_id: str) -> bool:
-        """
-        2PC Fase 2: ABORT
-
-        Descarta todas as escritas pendentes e libera os locks.
-        """
+        # 2PC Fase 2: ABORT
+        # 
+        # Descarta todas as escritas pendentes e libera os locks.
         self._abort_transaction(tx_id)
         self.logger.info(f"TX {tx_id[:8]}: GLOBAL_ABORT aplicado")
         return True
 
     def _abort_transaction(self, tx_id: str) -> None:
-        """Aborta uma transacao: descarta escritas pendentes e libera locks."""
+        # Aborta uma transacao: descarta escritas pendentes e libera locks.
         with self.tx_lock:
             ctx = self.transactions.get(tx_id)
             if not ctx:
@@ -435,7 +410,7 @@ class BankNode:
             self.transactions.pop(tx_id, None)
 
     def _wal_write(self, tx_id: str, state: str, operations: list) -> None:
-        """Escreve uma entrada no Write-Ahead Log e salva estado no disco."""
+        # Escreve uma entrada no Write-Ahead Log e salva estado no disco.
         with self.wal_lock:
             entry = {
                 "timestamp": time.time(),
@@ -450,17 +425,17 @@ class BankNode:
     # --- Consultas diretas de saldo/listagem ---
 
     def get_balance(self, account_id: int) -> Optional[float]:
-        """Retorna o saldo committed atual (sem contexto de transacao)."""
+        # Retorna o saldo committed atual (sem contexto de transacao).
         return self.accounts.get(account_id)
 
     def get_all_accounts(self) -> Dict[int, float]:
-        """Retorna todas as contas e seus saldos committed."""
+        # Retorna todas as contas e seus saldos committed.
         return dict(self.accounts)
 
     # --- Servidor de rede ---
 
     def start(self) -> None:
-        """Inicia o servidor do no bancario."""
+        # Inicia o servidor do no bancario.
         self.running = True
         self.server_socket = create_server_socket(self.host, self.port)
         self.logger.info(f"No bancario {self.node_id} iniciado em {self.host}:{self.port}")
@@ -487,14 +462,14 @@ class BankNode:
                 break
 
     def stop(self) -> None:
-        """Para o servidor do no bancario."""
+        # Para o servidor do no bancario.
         self.running = False
         if self.server_socket:
             self.server_socket.close()
         self.logger.info(f"No bancario {self.node_id} parado")
 
     def _handle_connection(self, sock: socket.socket, addr) -> None:
-        """Trata uma conexao individual do coordenador."""
+        # Trata uma conexao individual do coordenador.
         try:
             while self.running:
                 msg = recv_message(sock, timeout=60.0)
@@ -509,7 +484,7 @@ class BankNode:
             sock.close()
 
     def _process_message(self, msg: dict) -> Optional[dict]:
-        """Processa uma mensagem recebida e retorna uma resposta."""
+        # Processa uma mensagem recebida e retorna uma resposta.
         msg_type = msg.get("type")
         tx_id = msg.get("tx_id", "")
 
@@ -560,7 +535,7 @@ class BankNode:
             return make_message(MSG_ERROR, reason=f"Tipo de mensagem desconhecido: {msg_type}")
 
     def _cleanup_loop(self) -> None:
-        """Limpa periodicamente transacoes preparadas que ficaram obsoletas."""
+        # Limpa periodicamente transacoes preparadas que ficaram obsoletas.
         while self.running:
             time.sleep(10)
             now = time.time()

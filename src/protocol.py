@@ -1,11 +1,3 @@
-"""
-Modulo de protocolo para o sistema distribuido de transacoes bancarias.
-
-Implementa um protocolo de mensagens baseado em JSON sobre TCP
-utilizando Berkeley sockets. As mensagens sao prefixadas com 4 bytes
-(big-endian) indicando o tamanho do payload, garantindo framing confiavel.
-"""
-
 import json
 import struct
 import socket
@@ -50,12 +42,10 @@ MAX_MSG_SIZE = 1024 * 1024  # Tamanho maximo da mensagem: 1 MB
 
 
 def send_message(sock: socket.socket, msg: dict) -> None:
-    """
-    Envia uma mensagem JSON pelo socket TCP com framing por prefixo de tamanho.
-
-    Formato do protocolo:
-        [4 bytes: tamanho da mensagem (big-endian)] [N bytes: payload JSON]
-    """
+    # Envia uma mensagem JSON pelo socket TCP com framing por prefixo de tamanho.
+    # 
+    # Formato do protocolo:
+    # [4 bytes: tamanho da mensagem (big-endian)] [N bytes: payload JSON]
     try:
         payload = json.dumps(msg).encode('utf-8')
         header = struct.pack('!I', len(payload))
@@ -66,11 +56,9 @@ def send_message(sock: socket.socket, msg: dict) -> None:
 
 
 def recv_message(sock: socket.socket, timeout: float = None) -> dict | None:
-    """
-    Recebe uma mensagem JSON do socket TCP com framing por prefixo de tamanho.
-
-    Retorna None se a conexao foi fechada ou em caso de timeout.
-    """
+    # Recebe uma mensagem JSON do socket TCP com framing por prefixo de tamanho.
+    # 
+    # Retorna None se a conexao foi fechada ou em caso de timeout.
     old_timeout = sock.gettimeout()
     if timeout is not None:
         sock.settimeout(timeout)
@@ -108,7 +96,7 @@ def recv_message(sock: socket.socket, timeout: float = None) -> dict | None:
 
 
 def _recv_exactly(sock: socket.socket, n: int) -> bytes | None:
-    """Recebe exatamente n bytes do socket. Retorna None se a conexao foi fechada."""
+    # Recebe exatamente n bytes do socket. Retorna None se a conexao foi fechada.
     data = b''
     while len(data) < n:
         try:
@@ -122,11 +110,9 @@ def _recv_exactly(sock: socket.socket, n: int) -> bytes | None:
 
 
 def create_server_socket(host: str, port: int, backlog: int = 10) -> socket.socket:
-    """
-    Cria um socket TCP servidor utilizando a API Berkeley sockets.
-
-    Utiliza SO_REUSEADDR para permitir reinicializacao rapida.
-    """
+    # Cria um socket TCP servidor utilizando a API Berkeley sockets.
+    # 
+    # Utiliza SO_REUSEADDR para permitir reinicializacao rapida.
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_sock.bind((host, port))
@@ -136,11 +122,9 @@ def create_server_socket(host: str, port: int, backlog: int = 10) -> socket.sock
 
 
 def connect_to_server(host: str, port: int, timeout: float = 5.0) -> socket.socket:
-    """
-    Cria um socket TCP cliente e conecta ao servidor.
-
-    Retentativas sao tratadas pelo chamador.
-    """
+    # Cria um socket TCP cliente e conecta ao servidor.
+    # 
+    # Retentativas sao tratadas pelo chamador.
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     sock.connect((host, port))
@@ -148,7 +132,7 @@ def connect_to_server(host: str, port: int, timeout: float = 5.0) -> socket.sock
 
 
 def make_message(msg_type: str, **kwargs) -> dict:
-    """Cria uma mensagem do protocolo com o tipo e campos adicionais especificados."""
+    # Cria uma mensagem do protocolo com o tipo e campos adicionais especificados.
     msg = {"type": msg_type}
     msg.update(kwargs)
     return msg

@@ -1,26 +1,3 @@
-"""
-Coordenador de Transacoes - Sistema Distribuido de Transacoes Bancarias
-
-O coordenador gerencia transacoes distribuidas entre multiplos nos bancarios
-utilizando o protocolo Two-Phase Commit (2PC).
-
-Arquitetura:
-- Recebe requisicoes de clientes (saldo, deposito, saque, transferencia)
-- Determina quais nos bancarios estao envolvidos
-- Executa o protocolo 2PC para garantir atomicidade entre nos
-- Retorna os resultados ao cliente
-
-Protocolo 2PC:
-  Fase 1 (Votacao/Prepare):
-    1. Coordenador envia PREPARE + operacoes para cada no envolvido
-    2. Cada no adquire locks (S2PL), valida as operacoes e escreve no WAL
-    3. Cada no responde com VOTE_COMMIT ou VOTE_ABORT
-
-  Fase 2 (Decisao):
-    - Se TODOS votaram COMMIT -> envia GLOBAL_COMMIT para todos os nos
-    - Se ALGUM votou ABORT -> envia GLOBAL_ABORT para todos os nos
-"""
-
 import os
 import sys
 import socket
@@ -53,7 +30,7 @@ NODE_TIMEOUT = 10.0  # Tempo maximo (segundos) para aguardar resposta dos nos
 # --- Registro de Nos ---
 
 class NodeInfo:
-    """Informacoes sobre um no bancario."""
+    # Informacoes sobre um no bancario.
     def __init__(self, node_id: str, host: str, port: int,
                  account_start: int, account_end: int):
         self.node_id = node_id
@@ -69,12 +46,10 @@ class NodeInfo:
 # --- Coordenador de Transacoes ---
 
 class TransactionCoordinator:
-    """
-    Coordena transacoes distribuidas utilizando o protocolo 2PC.
-
-    Recebe requisicoes de clientes, determina os nos participantes
-    e garante a atomicidade de transacoes entre nos.
-    """
+    # Coordena transacoes distribuidas utilizando o protocolo 2PC.
+    # 
+    # Recebe requisicoes de clientes, determina os nos participantes
+    # e garante a atomicidade de transacoes entre nos.
 
     def __init__(self, host: str, port: int, nodes: List[NodeInfo]):
         self.host = host
@@ -89,14 +64,14 @@ class TransactionCoordinator:
         self.tx_log_lock = threading.Lock()
 
     def find_node(self, account_id: int) -> Optional[NodeInfo]:
-        """Encontra qual no eh responsavel por uma determinada conta."""
+        # Encontra qual no eh responsavel por uma determinada conta.
         for node in self.nodes:
             if node.owns_account(account_id):
                 return node
         return None
 
     def connect_to_node(self, node: NodeInfo) -> Optional[socket.socket]:
-        """Estabelece uma conexao com um no bancario."""
+        # Estabelece uma conexao com um no bancario.
         try:
             sock = connect_to_server(node.host, node.port, timeout=NODE_TIMEOUT)
             return sock
@@ -110,15 +85,13 @@ class TransactionCoordinator:
     # --- Protocolo 2PC ---
 
     def execute_transaction(self, operations_by_node: Dict[str, Tuple[NodeInfo, list]]) -> dict:
-        """
-        Executa uma transacao distribuida utilizando 2PC.
-
-        Args:
-            operations_by_node: dicionario de node_id -> (NodeInfo, lista_de_operacoes)
-
-        Returns:
-            Dicionario de resultado com status de sucesso e dados
-        """
+        # Executa uma transacao distribuida utilizando 2PC.
+        # 
+        # Args:
+        # operations_by_node: dicionario de node_id -> (NodeInfo, lista_de_operacoes)
+        # 
+        # Returns:
+        # Dicionario de resultado com status de sucesso e dados
         tx_id = str(uuid.uuid4())
         self.logger.info(f"TX {tx_id[:8]}: iniciando transacao distribuida")
         self.logger.info(f"TX {tx_id[:8]}: nos participantes: {list(operations_by_node.keys())}")
@@ -264,7 +237,7 @@ class TransactionCoordinator:
     # --- Tratadores de requisicoes do cliente ---
 
     def handle_balance(self, account_id: int) -> dict:
-        """Trata consulta de saldo - leitura direta (nao necessita 2PC)."""
+        # Trata consulta de saldo - leitura direta (nao necessita 2PC).
         node = self.find_node(account_id)
         if not node:
             return {"success": False, "reason": f"Conta {account_id} nao encontrada"}
@@ -290,7 +263,7 @@ class TransactionCoordinator:
             sock.close()
 
     def handle_deposit(self, account_id: int, amount: float) -> dict:
-        """Trata deposito - transacao em um unico no via 2PC."""
+        # Trata deposito - transacao em um unico no via 2PC.
         node = self.find_node(account_id)
         if not node:
             return {"success": False, "reason": f"Conta {account_id} nao encontrada"}
@@ -301,7 +274,7 @@ class TransactionCoordinator:
         })
 
     def handle_withdraw(self, account_id: int, amount: float) -> dict:
-        """Trata saque - transacao em um unico no via 2PC."""
+        # Trata saque - transacao em um unico no via 2PC.
         node = self.find_node(account_id)
         if not node:
             return {"success": False, "reason": f"Conta {account_id} nao encontrada"}
@@ -313,13 +286,11 @@ class TransactionCoordinator:
 
     def handle_transfer(self, from_account: int, to_account: int,
                         amount: float) -> dict:
-        """
-        Trata transferencia - transacao potencialmente entre nos via 2PC.
-
-        Esta eh a demonstracao principal de transacoes distribuidas:
-        dinheiro eh sacado de uma conta e depositado em outra,
-        potencialmente em nos diferentes, de forma atomica.
-        """
+        # Trata transferencia - transacao potencialmente entre nos via 2PC.
+        # 
+        # Esta eh a demonstracao principal de transacoes distribuidas:
+        # dinheiro eh sacado de uma conta e depositado em outra,
+        # potencialmente em nos diferentes, de forma atomica.
         from_node = self.find_node(from_account)
         to_node = self.find_node(to_account)
 
@@ -357,7 +328,7 @@ class TransactionCoordinator:
         return self.execute_transaction(operations_by_node)
 
     def handle_list_accounts(self) -> dict:
-        """Lista todas as contas de todos os nos."""
+        # Lista todas as contas de todos os nos.
         all_accounts = {}
         for node in self.nodes:
             sock = self.connect_to_node(node)
@@ -382,7 +353,7 @@ class TransactionCoordinator:
     # --- Tratamento de conexoes de clientes ---
 
     def _handle_client(self, sock: socket.socket, addr) -> None:
-        """Trata uma conexao de cliente."""
+        # Trata uma conexao de cliente.
         try:
             while self.running:
                 msg = recv_message(sock, timeout=120.0)
@@ -417,7 +388,7 @@ class TransactionCoordinator:
     # --- Servidor ---
 
     def start(self) -> None:
-        """Inicia o servidor do coordenador."""
+        # Inicia o servidor do coordenador.
         self.running = True
         self.server_socket = create_server_socket(self.host, self.port)
         self.logger.info(f"Coordenador de transacoes iniciado em {self.host}:{self.port}")
@@ -444,7 +415,7 @@ class TransactionCoordinator:
                 break
 
     def _wait_for_nodes(self) -> None:
-        """Aguarda todos os nos bancarios ficarem prontos."""
+        # Aguarda todos os nos bancarios ficarem prontos.
         self.logger.info("Aguardando nos bancarios ficarem prontos...")
         for node in self.nodes:
             retries = 0
@@ -471,7 +442,7 @@ class TransactionCoordinator:
                 )
 
     def stop(self) -> None:
-        """Para o servidor do coordenador."""
+        # Para o servidor do coordenador.
         self.running = False
         if self.server_socket:
             self.server_socket.close()

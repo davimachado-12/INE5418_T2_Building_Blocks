@@ -1,14 +1,3 @@
-"""
-Cliente CLI - Sistema Distribuido de Transacoes Bancarias
-
-Cliente interativo de linha de comando que se conecta ao Coordenador de
-Transacoes para realizar operacoes bancarias (saldo, deposito, saque,
-transferencia).
-
-Tambem suporta um modo de teste de stress para demonstrar o controle
-de concorrencia.
-"""
-
 import os
 import sys
 import socket
@@ -34,7 +23,7 @@ class BankClient:
         self.coord_port = coord_port
 
     def _send_request(self, msg: dict) -> dict:
-        """Envia uma requisicao ao coordenador e retorna a resposta."""
+        # Envia uma requisicao ao coordenador e retorna a resposta.
         sock = connect_to_server(self.coord_host, self.coord_port, timeout=30.0)
         try:
             send_message(sock, msg)
@@ -74,12 +63,10 @@ class BankClient:
 
 def run_stress_test(client: BankClient, num_threads: int = 5,
                     num_transactions: int = 10):
-    """
-    Executa transacoes concorrentes para demonstrar o controle de concorrencia.
-
-    Multiplas threads realizam transferencias simultaneas. Algumas dessas
-    transferencias irao conflitar e o mecanismo S2PL ira serializa-las.
-    """
+    # Executa transacoes concorrentes para demonstrar o controle de concorrencia.
+    # 
+    # Multiplas threads realizam transferencias simultaneas. Algumas dessas
+    # transferencias irao conflitar e o mecanismo S2PL ira serializa-las.
     print("\n--- TESTE DE STRESS: Transacoes Concorrentes ---\n")
 
     # Obtem o saldo total inicial
@@ -102,7 +89,7 @@ def run_stress_test(client: BankClient, num_threads: int = 5,
     start_barrier = threading.Barrier(num_threads)
 
     def worker(worker_id: int):
-        """Thread worker que executa transferencias aleatorias."""
+        # Thread worker que executa transferencias aleatorias.
         start_barrier.wait()  # Sincroniza todas as threads para iniciar simultaneamente
 
         for i in range(num_transactions):
@@ -166,7 +153,6 @@ def run_stress_test(client: BankClient, num_threads: int = 5,
 
     if abs(final_total - initial_total) < 0.01:
         print("  CONSERVACAO VERIFICADA: saldo total inalterado.")
-        print("  Isto comprova a atomicidade das transacoes distribuidas.")
     else:
         print(f"  CONSERVACAO VIOLADA: diferenca = {final_total - initial_total:.2f}")
 
@@ -196,7 +182,7 @@ Faixas de contas:
 
 
 def interactive_cli(client: BankClient):
-    """Executa a interface de linha de comando interativa."""
+    # Executa a interface de linha de comando interativa.
     print("\n--- Sistema Distribuido de Transacoes Bancarias ---")
     print("--- Building Block: Transacoes Distribuidas (2PC + S2PL) ---\n")
     print_help()
