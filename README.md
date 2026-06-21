@@ -1,27 +1,25 @@
-# 🏦 Sistema Distribuído de Transações Bancárias
+# Sistema Distribuído de Transações Bancárias
 
 **INE5418 - Computação Distribuída — T2: Building Blocks**
 
 > **Building Block:** Transações Distribuídas  
 > **Algoritmo:** Two-Phase Commit (2PC) + Strict Two-Phase Locking (S2PL)  
 > **Linguagem:** Python 3.11  
-> **Comunicação:** Berkeley Sockets (TCP)
 
 ---
 
-## 📋 Índice
+## Índice
 
 - [Visão Geral](#-visão-geral)
-- [Arquitetura](#-arquitetura)
+- [Componentes](#-componentes)
 - [Algoritmos Implementados](#-algoritmos-implementados)
 - [Como Executar](#-como-executar)
 - [Comandos do Cliente](#-comandos-do-cliente)
 - [Cenários de Demonstração](#-cenários-de-demonstração)
-- [Estrutura do Projeto](#-estrutura-do-projeto)
-
+- [Detalhes Técnicos](#-detalhes-técnicos)
 ---
 
-## 🔍 Visão Geral
+## Visão Geral
 
 Sistema bancário distribuído que implementa **transações distribuídas** como building block principal. A aplicação permite operações bancárias (depósito, saque, transferência) entre contas distribuídas em múltiplos nós, garantindo **atomicidade** e **isolamento** das transações.
 
@@ -31,30 +29,7 @@ O sistema utiliza:
 
 ---
 
-## 🏗️ Arquitetura
-
-```
-                    ┌─────────────┐
-                    │  CLI Client  │
-                    └──────┬──────┘
-                           │ TCP :5000
-                    ┌──────▼──────┐
-                    │ Coordinator  │
-                    │   (2PC)      │
-                    └──┬───┬───┬──┘
-                       │   │   │
-            TCP :6001  │   │   │  TCP :6003
-          ┌────────────┘   │   └────────────┐
-          │          TCP :6002               │
-   ┌──────▼──────┐ ┌──────▼──────┐ ┌───────▼─────┐
-   │ Bank Node A  │ │ Bank Node B  │ │ Bank Node C  │
-   │ Contas:      │ │ Contas:      │ │ Contas:      │
-   │ 1000-1004    │ │ 2000-2004    │ │ 3000-3004    │
-   │ (S2PL)       │ │ (S2PL)       │ │ (S2PL)       │
-   └──────────────┘ └──────────────┘ └──────────────┘
-```
-
-### Componentes
+## Componentes
 
 | Componente | Descrição | Porta |
 |------------|-----------|-------|
@@ -66,7 +41,7 @@ O sistema utiliza:
 
 ---
 
-## ⚙️ Algoritmos Implementados
+## Algoritmos Implementados
 
 ### Two-Phase Commit (2PC)
 
@@ -87,8 +62,8 @@ Garante **serializabilidade** e **isolamento** das transações concorrentes:
 
 - **Fase de crescimento:** locks são adquiridos conforme necessário
 - **Fase de encolhimento:** **todos** os locks são liberados somente no commit/abort
-- **Strict:** write locks são mantidos até o commit → previne aborts em cascata
-- **Prevenção de deadlock:** timeout na aquisição de locks → transação é abortada
+- **Strict:** write locks são mantidos até o commit, previne aborts em cascata
+- **Prevenção de deadlock:** timeout na aquisição de locks, transação é abortada
 
 ### Protocolo de Comunicação
 
@@ -102,7 +77,7 @@ Mensagens JSON sobre TCP com framing por prefixo de tamanho (4 bytes big-endian)
 
 ---
 
-## 🚀 Como Executar
+## Como Executar
 
 ### Pré-requisitos
 
@@ -118,12 +93,11 @@ docker compose up --build -d
 Isso irá iniciar:
 - 3 Bank Nodes (A, B, C)
 - 1 Transaction Coordinator
-- Todos na mesma rede Docker
 
 ### 2. Acessar o Cliente Interativo
 
 ```bash
-# Iniciar o cliente interativo (conecta automaticamente ao coordenador)
+# Iniciar o cliente interativo
 docker compose run --rm client
 ```
 
@@ -147,7 +121,7 @@ docker compose logs -f bank-node-a
 
 ---
 
-## 💻 Comandos do Cliente
+## Comandos do Cliente
 
 ```
 balance <conta>                   Consultar saldo de uma conta
@@ -159,35 +133,9 @@ stress [threads] [tx_por_thread]  Teste de stress com transações concorrentes
 help                              Mostrar ajuda
 quit                              Sair do cliente
 ```
-
-### Exemplos
-
-```bash
-# Consultar saldo
-bank> balance 1000
-
-# Depositar R$500 na conta 1000
-bank> deposit 1000 500
-
-# Transferência entre contas no mesmo nó (Node A)
-bank> transfer 1000 1001 200
-
-# Transferência cross-node (Node A → Node B) — usa 2PC!
-bank> transfer 1000 2000 300
-
-# Transferência cross-node (Node A → Node C) — usa 2PC!
-bank> transfer 1001 3000 150
-
-# Listar todas as contas
-bank> list
-
-# Teste de stress: 5 threads, 10 transações cada
-bank> stress 5 10
-```
-
 ---
 
-## 🎯 Cenários de Demonstração
+## Cenários de Demonstração
 
 ### Cenário 1: Execução Normal
 
@@ -213,7 +161,7 @@ O teste de stress:
 ### Cenário 3: Saldo Insuficiente
 
 ```bash
-bank> withdraw 1000 5000          # Saldo insuficiente → nó vota ABORT → 2PC aborta
+bank> withdraw 1000 5000          # Saldo insuficiente, nó vota ABORT, 2PC aborta
 ```
 
 ### Cenário 4: Falha de Nó
@@ -223,45 +171,23 @@ bank> withdraw 1000 5000          # Saldo insuficiente → nó vota ABORT → 2P
 docker compose stop bank-node-b
 
 # No cliente, tentar transferência para Node B
-bank> transfer 1000 2000 100      # Coordenador não consegue conectar → ABORT
-
-# Reiniciar o nó
-docker compose start bank-node-b
+bank> transfer 1000 2000 100      # Coordenador não consegue conectar, ABORT
 ```
-
 ---
 
-## 📁 Estrutura do Projeto
-
-```
-INE5418_T2_Building_Blocks/
-├── docker-compose.yml        # Orquestração dos containers
-├── Dockerfile                # Imagem Docker (Python 3.11 slim)
-├── README.md                 # Este arquivo
-├── T2 - Building Blocks.pdf  # Enunciado do trabalho
-└── src/
-    ├── __init__.py
-    ├── protocol.py           # Protocolo de comunicação (TCP + JSON)
-    ├── bank_node.py          # Nó bancário (S2PL + participante 2PC)
-    ├── coordinator.py        # Coordenador de transações (2PC)
-    └── client.py             # Cliente interativo (CLI)
-```
-
----
-
-## 🔧 Detalhes Técnicos
+## Detalhes Técnicos
 
 ### Comunicação via Berkeley Sockets
 
 Toda a comunicação utiliza sockets TCP (módulo `socket` do Python), que implementa a API Berkeley Sockets:
 
-- `socket()` → cria o socket
-- `bind()` → associa a um endereço
-- `listen()` → aceita conexões
-- `accept()` → aceita conexão de cliente
-- `connect()` → conecta ao servidor
-- `send()`/`recv()` → envia/recebe dados
-- `close()` → fecha o socket
+- `socket()` cria o socket
+- `bind()` associa a um endereço
+- `listen()` aceita conexões
+- `accept()` aceita conexão de cliente
+- `connect()` conecta ao servidor
+- `send()`/`recv()` envia/recebe dados
+- `close()` fecha o socket
 
 ### Write-Ahead Log (WAL)
 
@@ -272,6 +198,4 @@ Cada nó mantém um log de transações (em memória) para fins de recuperação
 
 ### Prevenção de Deadlock
 
-O sistema usa **timeout** na aquisição de locks para prevenir deadlocks:
-- Se um lock não pode ser adquirido em 5 segundos, a transação é abortada
-- Isso garante que o sistema não trava em cenários de concorrência
+O sistema usa **timeout** na aquisição de locks para prevenir deadlocks, se um lock não pode ser adquirido em 5 segundos, a transação é abortada
