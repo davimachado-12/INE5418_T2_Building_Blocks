@@ -21,7 +21,7 @@ from protocol import (
     MSG_RESPONSE, MSG_ERROR, MSG_ACK,
 )
 
-# --- Configuracao ---
+# Configuracao
 
 LOG_FORMAT = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, stream=sys.stdout)
@@ -30,7 +30,7 @@ LOCK_TIMEOUT = 5.0       # Tempo maximo (segundos) para aguardar um lock antes d
 PREPARE_HOLD_TIME = 30.0  # Tempo maximo (segundos) para manter o estado PREPARED
 
 
-# --- Tipos de Lock ---
+# Tipos de Lock
 
 class LockType(Enum):
     READ = "READ"
@@ -45,7 +45,7 @@ class LockEntry:
     waiters: list = field(default_factory=list)       # (tx_id, lock_type, event) aguardando
 
 
-# --- Estado da Transacao ---
+# Estado da Transacao
 
 class TxState(Enum):
     ACTIVE = "ACTIVE"
@@ -65,14 +65,9 @@ class TransactionContext:
     created_at: float = field(default_factory=time.time)
 
 
-# --- No Bancario ---
+# No Bancario
 
 class BankNode:
-    # No bancario que gerencia uma particao de contas.
-    # 
-    # Implementa Strict Two-Phase Locking (S2PL) para controle de concorrencia
-    # e participa do Two-Phase Commit (2PC) como cohort.
-
     def __init__(self, node_id: str, host: str, port: int,
                  account_range: Tuple[int, int], initial_balance: float = 1000.0):
         self.node_id = node_id
@@ -137,17 +132,9 @@ class BankNode:
         except Exception as e:
             self.logger.error(f"Erro ao salvar estado: {e}")
 
-    # --- Gerenciador de Locks (S2PL) ---
-
+    # Gerenciador de Locks (S2PL)
     def acquire_lock(self, tx_id: str, account_id: int,
                      lock_type: LockType) -> bool:
-        # Adquire um lock sobre uma conta para uma transacao.
-        # 
-        # Regras do S2PL:
-        # - Multiplos locks READ podem coexistir (compartilhados)
-        # - Lock WRITE eh exclusivo
-        # - Se o lock nao puder ser adquirido dentro do timeout, retorna False
-        # (prevencao de deadlock)
         deadline = time.time() + LOCK_TIMEOUT
         event = threading.Event()
 
@@ -208,10 +195,8 @@ class BankNode:
         )
         return False
 
+    # Libera TODOS os locks mantidos por uma transacao.
     def release_locks(self, tx_id: str) -> None:
-        # Libera TODOS os locks mantidos por uma transacao.
-        # 
-        # No S2PL, isso so acontece no momento do commit/abort.
         with self.lock_table_lock:
             accounts_to_release = []
             for account_id, entry in self.lock_table.items():
@@ -236,18 +221,18 @@ class BankNode:
                     f"TX {tx_id[:8]}: lock liberado na conta {account_id}"
                 )
 
-    # --- Operacoes de Transacao ---
+    # Operacoes de Transacao
 
+    # Inicia uma nova transacao neste no.
     def begin_transaction(self, tx_id: str) -> TransactionContext:
-        # Inicia uma nova transacao neste no.
         with self.tx_lock:
             ctx = TransactionContext(tx_id=tx_id)
             self.transactions[tx_id] = ctx
             self.logger.info(f"TX {tx_id[:8]}: BEGIN")
             return ctx
 
+    # Le o saldo de uma conta dentro de uma transacao (adquire lock READ).
     def read_balance(self, tx_id: str, account_id: int) -> Optional[float]:
-        # Le o saldo de uma conta dentro de uma transacao (adquire lock READ).
         if account_id not in self.accounts:
             return None
 
@@ -265,9 +250,9 @@ class BankNode:
             return ctx.pending_writes[account_id]
         return self.accounts[account_id]
 
+    # Escreve um novo saldo dentro de uma transacao (adquire lock WRITE).
     def write_balance(self, tx_id: str, account_id: int,
                       new_balance: float) -> bool:
-        # Escreve um novo saldo dentro de uma transacao (adquire lock WRITE).
         if account_id not in self.accounts:
             return False
 
@@ -291,16 +276,8 @@ class BankNode:
         )
         return True
 
-    # --- Protocolo 2PC (Participante) ---
-
+    # Protocolo 2PC (Participante)
     def handle_prepare(self, tx_id: str, operations: list) -> bool:
-        # 2PC Fase 1: PREPARE
-        # 
-        # Executa as operacoes tentativamente:
-        # 1. Adquire locks (fase de crescimento do S2PL)
-        # 2. Valida operacoes (ex.: saldo suficiente)
-        # 3. Escreve no WAL
-        # 4. Vota COMMIT ou ABORT
         ctx = self.begin_transaction(tx_id)
 
         for op in operations:
@@ -354,11 +331,8 @@ class BankNode:
         self.logger.info(f"TX {tx_id[:8]}: VOTE_COMMIT")
         return True
 
+    # 2PC Fase 2: COMMIT
     def handle_commit(self, tx_id: str) -> bool:
-        # 2PC Fase 2: COMMIT
-        # 
-        # Aplica todas as escritas pendentes e libera os locks
-        # (fase de encolhimento do S2PL).
         with self.tx_lock:
             ctx = self.transactions.get(tx_id)
             if not ctx:
@@ -387,16 +361,14 @@ class BankNode:
         self.logger.info(f"TX {tx_id[:8]}: GLOBAL_COMMIT aplicado")
         return True
 
+    # 2PC Fase 2: ABORT
     def handle_abort(self, tx_id: str) -> bool:
-        # 2PC Fase 2: ABORT
-        # 
-        # Descarta todas as escritas pendentes e libera os locks.
         self._abort_transaction(tx_id)
         self.logger.info(f"TX {tx_id[:8]}: GLOBAL_ABORT aplicado")
         return True
 
+    # Aborta uma transacao: descarta escritas pendentes e libera locks.
     def _abort_transaction(self, tx_id: str) -> None:
-        # Aborta uma transacao: descarta escritas pendentes e libera locks.
         with self.tx_lock:
             ctx = self.transactions.get(tx_id)
             if not ctx:
@@ -409,8 +381,8 @@ class BankNode:
         with self.tx_lock:
             self.transactions.pop(tx_id, None)
 
+    # Escreve uma entrada no Write-Ahead Log e salva estado no disco.
     def _wal_write(self, tx_id: str, state: str, operations: list) -> None:
-        # Escreve uma entrada no Write-Ahead Log e salva estado no disco.
         with self.wal_lock:
             entry = {
                 "timestamp": time.time(),
@@ -422,20 +394,20 @@ class BankNode:
             self._save_state()
             self.logger.debug(f"WAL: {tx_id[:8]} -> {state}")
 
-    # --- Consultas diretas de saldo/listagem ---
+    # Consultas diretas de saldo/listagem
 
+    # Retorna o saldo committed atual (sem contexto de transacao).
     def get_balance(self, account_id: int) -> Optional[float]:
-        # Retorna o saldo committed atual (sem contexto de transacao).
         return self.accounts.get(account_id)
 
+    # Retorna todas as contas e seus saldos committed.
     def get_all_accounts(self) -> Dict[int, float]:
-        # Retorna todas as contas e seus saldos committed.
         return dict(self.accounts)
 
-    # --- Servidor de rede ---
+    # Servidor de rede
 
+    # Inicia o servidor do no bancario.
     def start(self) -> None:
-        # Inicia o servidor do no bancario.
         self.running = True
         self.server_socket = create_server_socket(self.host, self.port)
         self.logger.info(f"No bancario {self.node_id} iniciado em {self.host}:{self.port}")
@@ -461,15 +433,15 @@ class BankNode:
             except OSError:
                 break
 
+    # Para o servidor do no bancario.
     def stop(self) -> None:
-        # Para o servidor do no bancario.
         self.running = False
         if self.server_socket:
             self.server_socket.close()
         self.logger.info(f"No bancario {self.node_id} parado")
 
+    # Trata uma conexao individual do coordenador.
     def _handle_connection(self, sock: socket.socket, addr) -> None:
-        # Trata uma conexao individual do coordenador.
         try:
             while self.running:
                 msg = recv_message(sock, timeout=60.0)
@@ -483,8 +455,8 @@ class BankNode:
         finally:
             sock.close()
 
+    # Processa uma mensagem recebida e retorna uma resposta.
     def _process_message(self, msg: dict) -> Optional[dict]:
-        # Processa uma mensagem recebida e retorna uma resposta.
         msg_type = msg.get("type")
         tx_id = msg.get("tx_id", "")
 
@@ -534,8 +506,8 @@ class BankNode:
             self.logger.warning(f"Tipo de mensagem desconhecido: {msg_type}")
             return make_message(MSG_ERROR, reason=f"Tipo de mensagem desconhecido: {msg_type}")
 
+    # Limpa periodicamente transacoes preparadas que ficaram obsoletas.
     def _cleanup_loop(self) -> None:
-        # Limpa periodicamente transacoes preparadas que ficaram obsoletas.
         while self.running:
             time.sleep(10)
             now = time.time()
@@ -553,8 +525,7 @@ class BankNode:
                 self._abort_transaction(tx_id)
 
 
-# --- Ponto de entrada ---
-
+# Ponto de entrada
 def main():
     node_id = os.environ.get("NODE_ID", "A")
     host = os.environ.get("NODE_HOST", "0.0.0.0")

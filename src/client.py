@@ -15,15 +15,15 @@ from protocol import (
 )
 
 
-# --- Cliente ---
+# Cliente
 
 class BankClient:
     def __init__(self, coord_host: str, coord_port: int):
         self.coord_host = coord_host
         self.coord_port = coord_port
 
+    # Envia uma requisicao ao coordenador e retorna a resposta.
     def _send_request(self, msg: dict) -> dict:
-        # Envia uma requisicao ao coordenador e retorna a resposta.
         sock = connect_to_server(self.coord_host, self.coord_port, timeout=30.0)
         try:
             send_message(sock, msg)
@@ -59,14 +59,10 @@ class BankClient:
         return self._send_request(make_message(MSG_LIST_ACCOUNTS))
 
 
-# --- Teste de Stress ---
+# Teste de Stress
 
 def run_stress_test(client: BankClient, num_threads: int = 5,
                     num_transactions: int = 10):
-    # Executa transacoes concorrentes para demonstrar o controle de concorrencia.
-    # 
-    # Multiplas threads realizam transferencias simultaneas. Algumas dessas
-    # transferencias irao conflitar e o mecanismo S2PL ira serializa-las.
     print("\n--- TESTE DE STRESS: Transacoes Concorrentes ---\n")
 
     # Obtem o saldo total inicial
@@ -88,8 +84,8 @@ def run_stress_test(client: BankClient, num_threads: int = 5,
     results = {"committed": 0, "aborted": 0, "errors": 0}
     start_barrier = threading.Barrier(num_threads)
 
+    # Thread worker que executa transferencias aleatorias.
     def worker(worker_id: int):
-        # Thread worker que executa transferencias aleatorias.
         start_barrier.wait()  # Sincroniza todas as threads para iniciar simultaneamente
 
         for i in range(num_transactions):
@@ -159,7 +155,7 @@ def run_stress_test(client: BankClient, num_threads: int = 5,
     print()
 
 
-# --- CLI Interativo ---
+# CLI Interativo
 
 def print_help():
     print("""
@@ -181,8 +177,8 @@ Faixas de contas:
 """)
 
 
+# Executa a interface de linha de comando interativa.
 def interactive_cli(client: BankClient):
-    # Executa a interface de linha de comando interativa.
     print("\n--- Sistema Distribuido de Transacoes Bancarias ---")
     print("--- Building Block: Transacoes Distribuidas (2PC + S2PL) ---\n")
     print_help()
@@ -314,9 +310,7 @@ def interactive_cli(client: BankClient):
             print("\nEncerrando cliente.")
             break
 
-
-# --- Ponto de entrada ---
-
+# Ponto de entrada
 def main():
     coord_host = os.environ.get("COORDINATOR_HOST", "coordinator")
     coord_port = int(os.environ.get("COORDINATOR_PORT", "5000"))

@@ -1,5 +1,5 @@
 services:
-  # ─── Bank Node A ───────────────────────────────────────────────────
+  # Bank Node A
   bank-node-a:
     build: .
     container_name: bank-node-a
@@ -20,7 +20,7 @@ services:
       - bank-network
     restart: unless-stopped
 
-  # ─── Bank Node B ───────────────────────────────────────────────────
+  # Bank Node B
   bank-node-b:
     build: .
     container_name: bank-node-b
@@ -41,7 +41,7 @@ services:
       - bank-network
     restart: unless-stopped
 
-  # ─── Bank Node C ───────────────────────────────────────────────────
+  # Bank Node C
   bank-node-c:
     build: .
     container_name: bank-node-c
@@ -62,7 +62,7 @@ services:
       - bank-network
     restart: unless-stopped
 
-  # ─── Transaction Coordinator ───────────────────────────────────────
+  # Transaction Coordinator
   coordinator:
     build: .
     container_name: coordinator
@@ -92,7 +92,7 @@ services:
       - bank-network
     restart: unless-stopped
 
-  # ─── CLI Client ────────────────────────────────────────────────────
+  # CLI Client
   client:
     build: .
     container_name: bank-client
