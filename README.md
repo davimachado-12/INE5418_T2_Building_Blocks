@@ -5,6 +5,7 @@
 > **Building Block:** Transações Distribuídas  
 > **Algoritmo:** Two-Phase Commit (2PC) + Strict Two-Phase Locking (S2PL)  
 > **Linguagem:** Python 3.11  
+> **Vídeo de Demonstração:** [https://youtu.be/7VZNv3CnG-Q](https://youtu.be/7VZNv3CnG-Q)
 
 ---
 
